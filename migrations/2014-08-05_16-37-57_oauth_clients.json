@@ -1,0 +1,68 @@
+[
+
+  { "tablename": "oauthclients"
+  , "COMMENT_1": "maybe always create two clients - one prod, one test?"
+  , "COMMENT_2": "xattrs stores desc, urls, ips, and testers"
+  , "uuid": true
+  , "columns": {
+      "name": { "type": "string", "nullable": false }
+    , "permissions": { "type": "text" }
+    , "scope": { "type": "text" }
+    , "account_uuid": { "type": "uuid", "references": ["accounts", "uuid"] }
+    }
+  , "timestamps": true
+  , "xattrs": true
+  }
+
+, { "tablename": "apikeys"
+  , "COMMENT_1": "id is not the id, but a hash"
+  , "COMMENT_2": "xattrs stores desc, urls, ips, and testers"
+  , "COMMENT_3": "expires_at is for phasing out tokens"
+  , "COMMENT_4": "I don't remember what perms would be for, but scope would limit the scope this key is allowed to request"
+  , "uuid": false
+  , "columns": {
+      "id": { "type": "string", "nullable": false, "primary": true }
+    , "name": { "type": "string", "nullable": false }
+    , "shadow": { "type": "string", "nullable": true }
+    , "insecure": { "type": "boolean", "default": false }
+    , "test": { "type": "boolean", "default": false }
+    , "oauthclient_uuid": { "type": "string", "references": ["oauthclients", "uuid"] }
+    , "permissions": { "type": "text" }
+    , "scope": { "type": "text" }
+    , "expires_at": { "type": "timestamp" }
+    }
+  , "timestamps": true
+  , "xattrs": true
+  }
+
+, { "tablename": "accesstokens"
+  , "uuid": false
+  , "columns": {
+      "id": { "type": "string", "nullable": false, "primary": true }
+    , "comment": { "type": "string", "nullable": true }
+    , "scope": { "type": "text" }
+    , "expires_at": { "type": "timestamp" }
+    , "implicit": { "type": "boolean" }
+    , "oauthclient_uuid": { "type": "uuid", "references": ["oauthclients", "uuid"] }
+    , "account_uuid": { "type": "uuid", "references": ["accounts", "uuid"] }
+    , "login_hashid": { "type": "string", "references": ["logins", "hashid"] }
+    }
+  , "timestamps": true
+  , "xattrs": true
+  }
+
+, { "tablename": "scopes"
+  , "uuid": false
+  , "columns": {
+      "id": { "type": "string", "nullable": false, "primary": true }
+    , "apikey_id": { "type": "string", "references": ["apikeys", "id"] }
+    , "oauthclient_uuid": { "type": "uuid", "references": ["oauthclients", "uuid"] }
+    , "login_id": { "type": "string", "references": ["logins", "hashid"] }
+    , "account_uuid": { "type": "uuid", "references": ["accounts", "uuid"] }
+    , "scope": { "type": "text" }
+    }
+  , "timestamps": true
+  , "xattrs": true
+  }
+
+]

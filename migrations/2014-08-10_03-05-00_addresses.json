@@ -1,0 +1,23 @@
+[
+  { "tablename": "addresses"
+  , "uuid": true
+  , "columns": {
+      "account_uuid": { "type": "string", "references": ["accounts", "uuid"], "nullable": false }
+
+    , "addressee": { "type": "string" }
+    , "comment": { "type": "string" }
+    , "type": { "type": "string", "nullable": false }
+    , "active": { "type": "boolean" }
+
+    , "post_office_box": { "type": "string" }
+    , "street_address": { "type": "string", "nullable": false }
+    , "extended_address": { "type": "text", "nullable": true }
+    , "locality": { "type": "text", "nullable": false }
+    , "region": { "type": "text", "nullable": false }
+    , "country_code": { "type": "text", "nullable": false }
+    , "postal_code": { "type": "text", "nullable": true }
+    }
+  , "timestamps": true
+  , "xattrs": true
+  }
+]

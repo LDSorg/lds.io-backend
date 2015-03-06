@@ -1,0 +1,12 @@
+[
+  { "tablename": "authcodes"
+  , "uuid": true
+  , "columns": {
+      "code": { "type": "text" }
+    , "expires_at": { "type": "timestamp" }
+    , "check_id": { "type": "string", "unique": true }
+    }
+  , "timestamps": true
+  , "xattrs": true
+  }
+]

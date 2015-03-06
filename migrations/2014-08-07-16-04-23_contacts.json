@@ -1,0 +1,60 @@
+[
+  { "tablename": "accounts_contacts"
+  , "COMMENT_1": "This table is the 'address book', if you will"
+  , "COMMENT_2": "The privacy restricts access to certain allowed fields (phone, email, etc)"
+  , "columns": {
+      "account_uuid": { "type": "uuid", "references": ["accounts", "uuid"] }
+    , "contact_uuid": { "type": "uuid", "references": ["contacts", "uuid"] }
+    , "privacy": { "type": "json" }
+    , "notes": { "type": "text" }
+    }
+  , "uuid": true
+  , "timestamps": true
+  , "xattrs": true
+  }
+
+, { "tablename": "contacts"
+  , "COMMENT_1": "default privacy is what should be granted automatically to cantact requests, to contact approvals, and on events such as update phone number"
+  , "COMMENT_TODO": "there should be another privacy that allows back-sharing updated phone numbers, etc"
+  , "columns": {
+      "name": { "type": "string", "nullable": false }
+    , "default_privacy": { "type": "json" }
+    }
+  , "uuid": true
+  , "timestamps": true
+  , "xattrs": true
+  }
+
+, { "tablename": "addresses_contacts"
+  , "columns": {
+      "name": { "type": "string", "nullable": false }
+    , "address_uuid": { "type": "uuid", "references": ["addresses", "uuid"] }
+    , "contact_uuid": { "type": "uuid", "references": ["accounts", "uuid"] }
+    }
+  , "uuid": true
+  , "timestamps": true
+  , "xattrs": true
+  }
+
+, { "tablename": "contacts_contactnodes"
+  , "columns": {
+      "name": { "type": "string", "nullable": false }
+    , "contact_uuid": { "type": "uuid", "references": ["accounts", "uuid"] }
+    , "contactnode_id": { "type": "string", "references": ["contactnodes", "uuid"] }
+    }
+  , "uuid": true
+  , "timestamps": true
+  , "xattrs": true
+  }
+
+, { "tablename": "contactnodes"
+  , "COMMENT_1": "node is only unique by type such as 'skype:coolaj86' or 'fb:coolaj86'"
+  , "columns": {
+      "id": { "type": "string", "nullable": false, "primary": true }
+    , "node": { "type": "string", "nullable": false }
+    , "type": { "type": "string", "nullable": false }
+    }
+  , "timestamps": true
+  , "xattrs": true
+  }
+]

@@ -1,0 +1,19 @@
+[
+  { "tablename": "messages"
+  , "uuid": true
+  , "columns": {
+      "template": "string"
+    }
+  , "timestamps": true
+  }
+, { "tablename": "accounts_messages"
+  , "timestamps": true
+  , "columns": [
+      { "primary": true, "name": "messages_uuid", "type": "uuid", "references": ["messages", "uuid"] }
+    , { "primary": true, "name": "accounts_uuid", "type": "uuid", "references": ["accounts", "uuid"] }
+    , { "name": "sent", "type": "string" }
+    , { "name": "read", "type": "string" }
+    ]
+  , "xattrs": true
+  }
+]

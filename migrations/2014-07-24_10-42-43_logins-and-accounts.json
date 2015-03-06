@@ -1,0 +1,50 @@
+[
+
+  { "tablename": "logins"
+  , "uuid": false
+  , "columns": {
+      "hashid": { "type": "string", "nullable": false, "primary": true }
+    , "uid": { "type": "string", "nullable": false }
+    , "type": { "type": "string", "nullable": false }
+    , "primary_account_id": "string"
+    }
+  , "timestamps": true
+  , "xattrs": true
+  , "TODO": [
+      "t.uuid().notNullable().unique().index()"
+    , "t.string('alias').nullable().references('uuid').inTable('logins')"
+    , "t.primary(['uid', 'type'])"
+    ]
+  }
+
+, { "tablename": "contactnodes_logins"
+  , "COMMENT_1": "a contactnode can only belong to one login, but a login can have many contactnodes"
+  , "COMMENT_2": "this is made a separate table only to avoid polluting contactnodes with fks"
+  , "columns": {
+      "id": { "type": "string", "nullable": false, "primary": true }
+    , "contactnode_id": { "type": "string", "unique": true, "nullable": false, "references": ["contactnodes", "id"] }
+    , "login_id": { "type": "string", "nullable": false, "references": ["logins", "hashid"] }
+    }
+  , "timestamps": true
+  , "xattrs": true
+  }
+
+, { "tablename": "accounts"
+  , "columns": {
+      "contact_uuid": { "type": "uuid", "references": ["contacts", "uuid"] }
+    }
+  , "uuid": true
+  , "timestamps": true
+  , "xattrs": true
+  }
+
+, { "tablename": "accounts_logins"
+  , "timestamps": true
+  , "columns": [
+      { "primary": true, "name": "login_hashid", "type": "string", "references": ["logins", "hashid"] }
+    , { "primary": true, "name": "account_uuid", "type": "uuid", "references": ["accounts", "uuid"] }
+    ]
+  , "xattrs": true
+  }
+
+]

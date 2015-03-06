@@ -1,0 +1,16 @@
+{ "id": "723670501"
+, "username": "coolaj86"
+, "displayName": "AJ ONeal"
+, "name": {
+    "familyName": "ONeal"
+  , "givenName": "AJ"
+  }
+, "gender": "male"
+, "profileUrl": "https://www.facebook.com/coolaj86"
+, "emails": [
+    {
+      "value": "coolaj86@gmail.com"
+    }
+  ]
+, "provider": "facebook"
+}
