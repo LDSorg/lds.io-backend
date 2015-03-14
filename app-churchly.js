@@ -81,6 +81,9 @@ function initApi(config, Db, app) {
   if (config.snakeApi) {
     app.use(require('connect-recase')({
       cancelParam: 'camel'
+      // TODO allow explicit and or default flag
+    , explicit: false
+    , default: 'snake'
     , prefixes: [config.apiPrefix]
     , exceptions: {}
     }));
@@ -114,7 +117,6 @@ function initApi(config, Db, app) {
   //
   // Generic App Routes
   //
-  // TODO a way to specify that a database should be attached to /me
   app
     .lazyApi('/session', function () {
       require('./lib/fixtures/root-user').create(ru, Auth);
@@ -130,11 +132,21 @@ function initApi(config, Db, app) {
     })
     ;
 
+  // 
+  // Specific App Routes
+  //
+  app
+    .lazy(config.apiPrefix + '/ldsconnect', function () {
+      var ldsConnectRestful = require('./lib/ldsconnect').createRouter(app, config, Db, ContactNodes);
+      return urlrouter(ldsConnectRestful.route);
+    })
+    ;
+
   return app;
 }
 
 module.exports.create = function () {
-  var app = express({ apiPrefix: '/api' });
+  var app = express();
   var setup;
 
   //
@@ -164,7 +176,9 @@ module.exports.create = function () {
   app.use('/setup', setup.route);
 
   return setup.getConfig().then(function (config) {
+    app.set('apiPrefix', config.apiPrefix);
     // this will not be called until setup has completed
+    // TODO setup should attach sql passphrase for this db
     config.knexInst = require('./lib/knex-connector').create(config.knex);
     return require('./bookcase/bookshelf-models').create(config, config.knexInst)
       .then(function (Db) {
