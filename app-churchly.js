@@ -60,13 +60,15 @@ function initApi(config, Db, app) {
   passport = new Passport();
 
   // Allows CORS access to API with ?access_token=
-  app
-    .use('/api', CORS({ credentials: false }))
-    ;
+  app.use('/api', CORS({ credentials: false }));
+
+  //
+  // Session Logic
+  //
+  //
 
   // initialize after all passport.use, but before any passport.authorize
   app
-    //.use(require('cookie-parser')("keyboardin' nyan nyan kit-kat cat nom nom nom!", { secure: true, httpOnly: true }))
     .use(require('express-session')({
       secret: config.sessionSecret
     , httpOnly: true
@@ -91,17 +93,30 @@ function initApi(config, Db, app) {
 
   // TODO move attaching the account into a subsequent middleware?
   sessionLogic = require('./lib/sessionlogic').init(passport, config, Auth, loginsController);
-  app
-    .use(config.apiPrefix, sessionLogic.tryBearerSession)
-    .use(config.apiPrefix, sessionLogic.rejectUnauthorizedSessions)
-    ;
 
+  app.use(config.apiPrefix, sessionLogic.tryBearerSession);
   app.lazyMatch('/api/session', function () {
     if (!sessionRouter) {
       sessionRouter = urlrouter(sessionLogic.route);
     }
     return sessionRouter;
   });
+
+  //
+  // Generic Session / Login / Account Routes
+  //
+  app
+    .lazyApi('/session', function () {
+      require('./lib/fixtures/root-user').create(ru, Auth);
+      return urlrouter(require('./lib/session').createRouter().route);
+    })
+    .lazyApi('/logins', function () {
+      var loginsRestful;
+      loginsRestful = Logins.createRouter(app, config, Db, sessionLogic.manualLogin, ContactNodes);
+      return urlrouter(loginsRestful.route);
+    })
+    ;
+
   app.lazyMatch('/oauth', function () {
     if (!sessionRouter) {
       sessionRouter = urlrouter(sessionLogic.route);
@@ -114,30 +129,34 @@ function initApi(config, Db, app) {
     return urlrouter(oauth2Logic.route);
   });
 
+
+  // ////////////////////////////////////////////////////////////////
   //
-  // Generic App Routes
+  // No Unauthenticated Sessions Beyond this point!!!
+  //
+  // ////////////////////////////////////////////////////////////////
+  app.use(config.apiPrefix, sessionLogic.rejectUnauthorizedSessions);
+
+  //
+  // Routes provided by the framework
+  //
   //
   app
-    .lazyApi('/session', function () {
-      require('./lib/fixtures/root-user').create(ru, Auth);
-      return urlrouter(require('./lib/session').createRouter().route);
-    })
     .lazyApi('/accounts', function () {
       return urlrouter(require('./lib/accounts').createRouter(app, config, Db, Auth, loginsController).route);
     })
-    .lazyApi('/logins', function () {
-      var loginsRestful;
-      loginsRestful = Logins.createRouter(app, config, Db, sessionLogic.manualLogin, ContactNodes);
-      return urlrouter(loginsRestful.route);
+    // TODO match patterns such as '/accounts/:accountId/clients'
+    .lazyApi('/accounts', function () {
+      return urlrouter(require('./lib/oauthclients').createRouter(app, config, Db).route);
     })
-    ;
+
+
 
   // 
-  // Specific App Routes
+  // Product-Specific App Routes
   //
-  app
     .lazy(config.apiPrefix + '/ldsconnect', function () {
-      var ldsConnectRestful = require('./lib/ldsconnect').createRouter(app, config, Db, ContactNodes);
+      var ldsConnectRestful = require('./lib/ldsconnect').createRouter(app, config, Db, ContactNodes.ContactNodes || ContactNodes);
       return urlrouter(ldsConnectRestful.route);
     })
     ;
