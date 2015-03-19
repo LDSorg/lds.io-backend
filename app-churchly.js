@@ -60,7 +60,13 @@ function initApi(config, Db, app) {
   passport = new Passport();
 
   // Allows CORS access to API with ?access_token=
-  app.use('/api', CORS({ credentials: false }));
+  app.use('/api', CORS({ credentials: false, headers: [
+    'X-Requested-With'
+  , 'X-HTTP-Method-Override'
+  , 'Content-Type'
+  , 'Accept'
+  , 'Authorization'
+  ] }));
 
   //
   // Session Logic
