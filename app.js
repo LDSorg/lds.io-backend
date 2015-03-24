@@ -6,6 +6,7 @@ var express = require('express-lazy');
 function initApi(config, Db, app) {
   // TODO maybe a main DB for core (Accounts) and separate DBs for the modules?
   var sessionLogic;
+  var sessionStrategies;
   var sessionRouter;
     //, ws = require('./lib/ws')
     //, wsport = config.wsport || 8282
@@ -60,7 +61,7 @@ function initApi(config, Db, app) {
   passport = new Passport();
 
   // Allows CORS access to API with ?access_token=
-  app.use('/api', CORS({ credentials: false, headers: [
+  app.use('/api', CORS({ credentials: true, headers: [
     'X-Requested-With'
   , 'X-HTTP-Method-Override'
   , 'Content-Type'
@@ -99,13 +100,44 @@ function initApi(config, Db, app) {
 
   // TODO move attaching the account into a subsequent middleware?
   sessionLogic = require('./lib/sessionlogic').init(passport, config, Auth, loginsController);
-
   app.use(config.apiPrefix, sessionLogic.tryBearerSession);
   app.lazyMatch('/api/session', function () {
     if (!sessionRouter) {
       sessionRouter = urlrouter(sessionLogic.route);
     }
     return sessionRouter;
+  });
+
+  sessionStrategies = {
+    facebook: function () { return require('./lib/sessionlogic/providers/facebook') }
+  //, loopback: require('./lib/sessionlogic/providers/loopback')
+  //, ldsconnect: require('./lib/sessionlogic/providers/ldsconnect')
+  //, twitter: require('./lib/sessionlogic/providers/twitter')
+  //, tumblr: require('./lib/sessionlogic/providers/tumblr')
+  };
+
+  Object.keys(sessionStrategies).forEach(function (strategyName) {
+    // TODO nix this badness
+    var requireStrategy = sessionStrategies[strategyName];
+    var sessionRouters = {};
+
+    app.lazyMatch(config.oauthPrefix + '/' + strategyName, function () {
+      var strategy;
+
+      if (!sessionRouters[strategyName]) {
+        // TODO
+        // Since the API prefix is sometimes necessary,
+        // it's probably better to always require the
+        // auth providers to use it manually
+
+        // TODO strategyName should be enforced by the requirer, not the requiree
+        strategy = sessionLogic.strategies[strategyName] = requireStrategy();
+        // TODO change all to use 'createRouter' instead of 'init'
+        sessionRouters[strategyName] = urlrouter((strategy.createRouter||strategy.init)(passport, config, { login: sessionLogic.loginWrapper }));
+      }
+
+      return sessionRouters[strategyName];
+    });
   });
 
   //
@@ -129,6 +161,7 @@ function initApi(config, Db, app) {
     }
     return sessionRouter;
   });
+
   app.lazyMatch('/oauth', function () {
     var oauth2Logic;
     oauth2Logic = require('./lib/provide-oauth2').create(passport, config, Db, Auth, loginsController);
@@ -155,7 +188,6 @@ function initApi(config, Db, app) {
     .lazyApi('/accounts', function () {
       return urlrouter(require('./lib/oauthclients').createRouter(app, config, Db).route);
     })
-
 
 
   // 
