@@ -11,21 +11,19 @@ In Legal
 ========
 
 LDS I/O
+-------
 
-Contributor License Agreement ("Agreement")
-------
+### Contributor License Agreement ("Agreement")
 
 Thank you for your interest in the LDS I/O open source project being administered by AJ ONeal Tech LLC , dba LDS I/O ("LDS I/O"). The form of license below is a document that clarifies the terms under which You, the person contributing code, may contribute software, bug fixes, configuration changes, documentation, or any other materials that you send to us related to the Project (each a "Contribution") to the project. We appreciate your participation in our project, and your help in improving the project, so we want you to understand what will be done with the Contributions. This license is for your protection as well as the protection of LDS I/O and its licensees; it does not change your rights to use your own Contributions for any other purpose.
 
 If you have questions about these terms, please contact us at legal@lds.io.
 
-Corporate Contributions:
------
+#### Corporate Contributions:
 
 If you are employed as a software engineer, or if your employer is in the business of developing software, or otherwise may claim rights in the Contributions, please provide information about your employer's policy on contributing to open source projects, including the name of the supervisor to contact in connection with such contributions.
 
-You and LDS I/O agree:
------
+#### You and LDS I/O agree:
 
 1. **You grant us the ability to use the Contributions in any way**. You hereby grant to LDS I/O, a non-exclusive, irrevocable, worldwide, royalty-free, sublicenseable, transferable license under all of Your relevant intellectual property rights (including copyright, patent, and any other rights), to use, copy, prepare derivative works of, distribute and publicly perform and display the Contributions on any licensing terms, including without limitation: (a) open source licenses like the GNU General Public License (GPL), the GNU Lesser General Public License (LGPL), the Common Public License, or the Berkeley Software Distribution license (BSD); and (b) binary, proprietary, or commercial licenses. Except for the licenses granted herein, You reserve all right, title, and interest in and to the Contribution.
 
