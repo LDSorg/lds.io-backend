@@ -10,8 +10,7 @@ In Short
 In Legal
 ========
 
-LDS I/O
--------
+### LDS I/O
 
 ### Contributor License Agreement ("Agreement")
 
