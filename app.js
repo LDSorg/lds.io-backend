@@ -2,6 +2,7 @@
 
 var urlrouter = require('urlrouter');
 var express = require('express-lazy');
+var recase;
 
 function initApi(config, Db, app) {
   // TODO maybe a main DB for core (Accounts) and separate DBs for the modules?
@@ -18,6 +19,7 @@ function initApi(config, Db, app) {
   var CORS = require('connect-cors');
   var Logins = require('./lib/lds-logins');
   var loginsController = Logins.createController(config, Db, ContactNodes);
+  var ldsConnectRestful;
 
   Object.defineProperty(config, 'host', {
     get: function () {
@@ -47,12 +49,10 @@ function initApi(config, Db, app) {
         req.skipAuthn = true;
         next();
       })
-    /*
     .use(config.sessionPrefix, function (req, res, next) {
         req.skipAuthn = true;
         next();
       })
-    */
     ;
 
   //
@@ -88,14 +88,25 @@ function initApi(config, Db, app) {
     ;
 
   if (config.snakeApi) {
-    app.use(require('connect-recase')({
-      cancelParam: 'camel'
-      // TODO allow explicit and or default flag
-    , explicit: false
-    , default: 'snake'
-    , prefixes: [config.apiPrefix]
-    , exceptions: {}
-    }));
+    app.use(function (req, res, next) {
+      if (!recase) {
+        recase = require('connect-recase')({
+          cancelParam: 'camel'
+          // TODO allow explicit and or default flag
+        , explicit: false
+        , default: 'snake'
+        , prefixes: [config.apiPrefix]
+        , exceptions: {}
+        })
+      }
+
+      if (!req.url.match(config.oauthPrefix)) {
+        recase(req, res, next);
+        return;
+      }
+
+      next();
+    });
   }
 
   // TODO move attaching the account into a subsequent middleware?
@@ -153,16 +164,13 @@ function initApi(config, Db, app) {
       loginsRestful = Logins.createRouter(app, config, Db, sessionLogic.manualLogin, ContactNodes);
       return urlrouter(loginsRestful.route);
     })
+    // TODO don't allow users without login
+    .lazyApi('/accounts', function () {
+      return urlrouter(require('./lib/accounts').createRouter(app, config, Db, Auth, loginsController).route);
+    })
     ;
 
-  app.lazyMatch('/oauth', function () {
-    if (!sessionRouter) {
-      sessionRouter = urlrouter(sessionLogic.route);
-    }
-    return sessionRouter;
-  });
-
-  app.lazyMatch('/oauth', function () {
+  app.lazyMatch(config.oauthPrefix, function () {
     var oauth2Logic;
     oauth2Logic = require('./lib/provide-oauth2').create(passport, config, Db, Auth, loginsController);
     return urlrouter(oauth2Logic.route);
@@ -174,28 +182,104 @@ function initApi(config, Db, app) {
   // No Unauthenticated Sessions Beyond this point!!!
   //
   // ////////////////////////////////////////////////////////////////
-  app.use(config.apiPrefix, sessionLogic.rejectUnauthorizedSessions);
+  app.use(config.apiPrefix, function controlApiAccess(req, res, next) {
+    var errMsg = "";
+
+    // TODO link all logins to a client
+    req.client = req.client || {};
+    req.client.config = {
+      stripe: config.stripe
+    , twilio: config.twilio
+    , mailer: config.mailer
+    }; // TODO - for stripe token and such
+
+    if (!req.user) {
+      res.error({
+        message: "Invalid login / Unauthorized access to " + config.apiPrefix
+      , code: 401
+      , class: "INVALID-AUTH-N"
+      , superclasses: []
+      });
+      return;
+    }
+
+    // TODO remove
+    if (!req.user.$account) {
+      res.error({
+        message: "Valid login, but Invalid account / Unauthorized access to " + config.apiPrefix
+      , code: 401
+      , class: "INVALID-AUTH-Z"
+      , superclasses: []
+      });
+      return;
+    }
+
+    if (req.user.$token) {
+      next();
+      return;
+    }
+
+    // If the user is authenticating with cookies (not an access token)
+    // then they must have the correct browser origin
+    if (config.trustedOrigins.some(function (origin) {
+      var escapeRegExp = require('escape-string-regexp');
+      var re = new RegExp("^(https?|spdy):\\/\\/([^\\/]+\\.)?" + escapeRegExp(origin) + "(:\\d+)?($|\\/|\\?)");
+      var matches = re.test(req.headers.origin || req.headers.referer);
+
+      return matches;
+    })) {
+      next();
+      return;
+    }
+    if (req.headers.origin) {
+      errMsg = "Invalid Origin '" + encodeURI(req.headers.origin) + "'";
+    } else if (req.headers.referer) {
+      errMsg = "Invalid Referer '" + encodeURI(req.headers.referer) + "'";
+    }
+
+    res.error({
+      message: errMsg + " for " + encodeURI(config.apiPrefix) + " access"
+    , code: 401
+    , class: "INVALID-ORIGIN"
+    , superclasses: []
+    });
+  });
 
   //
   // Routes provided by the framework
   //
   //
   app
-    .lazyApi('/accounts', function () {
-      return urlrouter(require('./lib/accounts').createRouter(app, config, Db, Auth, loginsController).route);
-    })
     // TODO match patterns such as '/accounts/:accountId/clients'
     .lazyApi('/accounts', function () {
       return urlrouter(require('./lib/oauthclients').createRouter(app, config, Db).route);
     })
-
+    ;
 
   // 
   // Product-Specific App Routes
   //
+  app
+    .lazy(config.apiPrefix + '/ldsio', function () {
+      if (!ldsConnectRestful) {
+        ldsConnectRestful = urlrouter(require('./lib/ldsconnect')
+          .createRouter(app, config, Db, ContactNodes.ContactNodes || ContactNodes).route)
+          ;
+      }
+      return ldsConnectRestful;
+    })
     .lazy(config.apiPrefix + '/ldsconnect', function () {
-      var ldsConnectRestful = require('./lib/ldsconnect').createRouter(app, config, Db, ContactNodes.ContactNodes || ContactNodes);
-      return urlrouter(ldsConnectRestful.route);
+      if (!ldsConnectRestful) {
+        ldsConnectRestful = urlrouter(require('./lib/ldsconnect')
+          .createRouter(app, config, Db, ContactNodes.ContactNodes || ContactNodes).route)
+          ;
+      }
+      return ldsConnectRestful;
+      /*
+      return function (req, res, next) {
+        res.redirect(config.apiPrefix + '/ldsio' + req.url);
+      };
+      */
     })
     ;
 
@@ -231,6 +315,52 @@ module.exports.create = function () {
 
   setup = require('./lib/setup').create(app);
   app.use('/setup', setup.route);
+  app.use('/oauth', function (req, res, next) {
+    res.redirect('/api/oauth3' + req.url);
+  });
+  app.use(function (req, res, next) {
+    // TODO update these strings
+
+    // various styles for authorization dialog
+    if (-1 !== [
+      '/dialog/authorize'
+    , '/api/oauth3/dialog/authorize'
+    , '/api/oauth3/dialog'
+    , '/dialog/oauth'                 // facebook style
+    ].indexOf(req.url)) {
+      res.redirect('/api/oauth3/authorization_dialog');
+      return;
+    }
+
+    // various styles for authorization decision
+    if (-1 !== [
+      '/dialog/authorize/decision'
+    , '/api/oauth3/dialog/authorize/decision'
+    ].indexOf(req.url)) {
+      res.redirect('/api/oauth3/authorization_decision');
+      return;
+    }
+
+    // various styles for access_token
+    if (-1 !== [
+      '/api/oauth3/token'
+    , '/oauth/access_token'         // facebook style
+    ].indexOf(req.url)) {
+      res.redirect('/api/oauth3/access_token');
+      return;
+    }
+
+    // various styles for profile
+    if (-1 !== [
+      '/me'
+    , '/profile'
+    ].indexOf(req.url)) {
+      res.redirect('/api/ldsio/accounts');
+      return;
+    }
+
+    next();
+  });
 
   return setup.getConfig().then(function (config) {
     app.set('apiPrefix', config.apiPrefix);
