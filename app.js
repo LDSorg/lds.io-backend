@@ -67,7 +67,7 @@ function initApi(config, Db, app) {
   , 'Content-Type'
   , 'Accept'
   , 'Authorization'
-  ] }));
+  ], methods: [ "GET", "POST", "PATCH", "PUT", "DELETE" ] }));
 
   //
   // Session Logic
