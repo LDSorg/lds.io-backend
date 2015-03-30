@@ -136,6 +136,7 @@ function initApi(config, Db, app) {
 
   sessionStrategies = {
     facebook: function () { return require('./lib/sessionlogic/providers/facebook') }
+  , google: function () { return require('./lib/sessionlogic/providers/google') }
   //, loopback: require('./lib/sessionlogic/providers/loopback')
   //, ldsconnect: require('./lib/sessionlogic/providers/ldsconnect')
   //, twitter: require('./lib/sessionlogic/providers/twitter')
