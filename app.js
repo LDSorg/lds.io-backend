@@ -109,6 +109,21 @@ function initApi(config, Db, app) {
     });
   }
 
+  //
+  // Public APIs
+  //
+  //
+  app
+    .lazyApi('/public/apps', function () {
+      return urlrouter(require('./lib/apps').createRouter(app, config, Db).route);
+    })
+    ;
+
+  //
+  // Session Logic Stuff
+  //
+  //
+
   // TODO move attaching the account into a subsequent middleware?
   sessionLogic = require('./lib/sessionlogic').init(passport, config, Auth, loginsController);
   app.use(config.apiPrefix, sessionLogic.tryBearerSession);
