@@ -1,7 +1,8 @@
 {
   "protocol": "http",
-  "hostname": "local.ldsconnect.org",
+  "hostname": "local.lds.io",
   "trustedOrigins": ["local.foobar3000.com", "local.helloworld3000.com", "local.ldsconnect.org"],
+  "oauth3Frontend": "https://local.lds.io",
   "port": 4004,
   "wsport": 4204,
   "rootUser": {
