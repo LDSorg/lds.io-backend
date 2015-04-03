@@ -6,6 +6,7 @@
   , "uuid": true
   , "columns": {
       "name": { "type": "string", "nullable": false }
+    , "secret": { "type": "string", "nullable": false }
     , "permissions": { "type": "text" }
     , "scope": { "type": "text" }
     , "account_uuid": { "type": "uuid", "references": ["accounts", "uuid"] }
