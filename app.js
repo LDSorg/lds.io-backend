@@ -1,5 +1,6 @@
 'use strict';
 
+var PromiseA = require('bluebird');
 var urlrouter = require('urlrouter');
 var express = require('express-lazy');
 var recase;
@@ -110,6 +111,39 @@ function initApi(config, Db, app) {
   }
 
   //
+  // Disallow insecure connetions
+  //
+  app.use(config.apiPrefix, function (req, res, next) {
+    var rejectableRequest = require('./lib/common').rejectableRequest;
+    var promise;
+
+    function go() {
+      var referer = req.headers.referer || req.headers.origin;
+      // TODO allow browsers and curl ??
+      //var browser = /mozilla|curl|safari|opera/i.test(req.headers['user-agent']);
+
+      if (!req.secure) {
+        return PromiseA.reject("[Sanity Check Fail] Connection is insecure. See https://letsencrypt.org");
+      }
+
+      if (!referer) {
+        // Probably a server-side request
+        return;
+      }
+
+      if (!/^(https|spdy):\/\//.test(referer)) {
+        return PromiseA.reject("The web app requesting API access is insecure. See https://letsencrypt.org");
+      }
+    }
+
+    promise = PromiseA.resolve(go()).then(function () {
+      next();
+    });
+
+    rejectableRequest(req, res, promise, "checking security of connection");
+  });
+
+  //
   // Public APIs
   //
   //
@@ -198,6 +232,120 @@ function initApi(config, Db, app) {
   // No Unauthenticated Sessions Beyond this point!!!
   //
   // ////////////////////////////////////////////////////////////////
+  // Tokens, Tokens, Apps, and Tokens
+  // TODO disallow cookie sessions entirely and only allow tokens
+  // TODO req.jwt
+  app.use(config.apiPrefix, function controlApiAccess(req, res, next) {
+    var rejectableRequest = require('./lib/common').rejectableRequest;
+    var $token = req.user && req.user.$token;
+    var $client;
+    var promise;
+
+    if (!$token) {
+      next();
+      return;
+    }
+
+    function clear(req) {
+      req.logout();
+      req.user = null;
+      req.$accounts = null;
+      req.$account = null;
+      req.$token = null;
+      req.$client = null;
+    }
+
+    promise = $token.load('oauthclient').then(function () {
+      var url = require('url');
+      var referer = req.headers.referer || req.headers.origin;
+      var ua = /mozilla|dillo/i.test(req.headers['user-agent']);
+      var requestIp = require('request-ip');
+      var ip = requestIp.getClientIp(req);
+      var domains;
+      var ips;
+
+      $client = $token.related('oauthclient');
+      // TODO
+      // check live && production
+      // check allowed domains
+      if (!$client.get('live') && !$token.get('test')) {
+        return PromiseA.reject("You are using a production token in a test environment.");
+      }
+
+      if (referer && ua) {
+        req.fromBrowser = true;
+      // if ($token.get('insecure'))
+        // this is a browser token
+
+        /*
+        if (!referer) {
+          clear(req);
+          return;
+        }
+        */
+
+        if ($token.get('test')) {
+          domains = config.testDomains || $client.get('urls');
+          if (!domains.some(function (domain) {
+            return url.parse(domain).host === url.parse(referer).host;
+          })) {
+            return PromiseA.reject(
+              "The request origin/referer did not match the allowed **test** domains"
+            );
+          }
+        } else {
+          domains = $client.get('urls');
+          if (!domains.some(function (domain) {
+            return url.parse(domain).host === url.parse(referer).host;
+          })) {
+            return PromiseA.reject(
+              "The request origin/referer did not match the allowed **production** domains"
+            );
+          }
+        }
+      } else {
+        req.fromServer = true;
+        // this is a server token
+
+        /*
+        if (referer) {
+          // a server might have a user agent, but shouldn't have a referer
+          clear(req);
+          return;
+        }
+        */
+
+        if ($token.get('test')) {
+
+          ips = config.testDomains || $client.get('ips') || [];
+          if (ips.length && !ips.some(function (allowedIp) {
+            return allowedIp === ip;
+          })) {
+            return PromiseA.reject(
+              "The request ip did not match the allowed **test** ips."
+              + " Note: use the form 1.1.1.1 subnet checking (1.1.0.0/16) is not yet implemented)"
+            );
+          }
+        } else {
+          ips = $client.get('ips') || [];
+
+          if (!ips.length && !ips.some(function (allowed) {
+            return allowedIp === ip;
+          })) {
+            return PromiseA.reject(
+              "The request origin/referer did not match the allowed **production** domains"
+            );
+          }
+        }
+      }
+    }).then(function () {
+      req.$client = $client;
+      req.$token = $token;
+      next();
+    });
+    rejectableRequest(req, res, promise, "checking token against app");
+  });
+
   app.use(config.apiPrefix, function controlApiAccess(req, res, next) {
     var errMsg = "";
 
