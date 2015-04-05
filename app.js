@@ -222,7 +222,8 @@ function initApi(config, Db, app) {
 
   app.lazyMatch(config.oauthPrefix, function () {
     var oauth2Logic;
-    oauth2Logic = require('./lib/provide-oauth2').create(passport, config, Db, Auth, loginsController);
+    oauth2Logic = require('./lib/provide-oauth2').create(passport, config, Db
+      , Auth.AccessTokens, Auth.AppLogin, loginsController);
     return urlrouter(oauth2Logic.route);
   });
 
