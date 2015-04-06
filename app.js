@@ -128,17 +128,17 @@ function initApi(config, Db, app) {
 
       if (!referer) {
         // Probably a server-side request
-        return;
+        return PromiseA.resolve();
       }
 
       if (!/^(https|spdy):\/\//.test(referer)) {
         return PromiseA.reject("The web app requesting API access is insecure. See https://letsencrypt.org");
       }
+
+      return PromiseA.resolve();
     }
 
-    promise = PromiseA.resolve(go()).then(function () {
-      next();
-    });
+    promise = go().then(next);
 
     rejectableRequest(req, res, promise, "checking security of connection");
   });
@@ -224,6 +224,7 @@ function initApi(config, Db, app) {
     var oauth2Logic;
     oauth2Logic = require('./lib/provide-oauth2').create(passport, config, Db
       , Auth.AccessTokens, Auth.AppLogin, loginsController);
+
     return urlrouter(oauth2Logic.route);
   });
 
@@ -288,10 +289,14 @@ function initApi(config, Db, app) {
         if ($token.get('test')) {
           domains = config.testDomains || $client.get('urls');
           if (!domains.some(function (domain) {
-            return url.parse(domain).host === url.parse(referer).host;
+            var d = url.parse(domain.replace(/^((https?|spdy):\/\/)?/, 'https://'));
+            var r = url.parse(referer);
+
+            return d.hostname === r.hostname;
           })) {
             return PromiseA.reject(
-              "The request origin/referer did not match the allowed **test** domains"
+              "The request origin/referer did not match any of the allowed **test** domains: '"
+                + testDomains.join(' ') + "'"
             );
           }
         } else {
