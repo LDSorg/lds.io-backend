@@ -98,7 +98,7 @@ function initApi(config, Db, app) {
         , default: 'snake'
         , prefixes: [config.apiPrefix]
         , exceptions: {}
-        })
+        });
       }
 
       if (!req.url.match(config.oauthPrefix)) {
@@ -159,7 +159,14 @@ function initApi(config, Db, app) {
   //
 
   // TODO move attaching the account into a subsequent middleware?
-  sessionLogic = require('./lib/sessionlogic').init(passport, config, Auth, loginsController);
+  sessionLogic = require('./lib/sessionlogic').init(
+    passport
+  , config
+  , Auth
+  , Auth.AppLogin // OauthClients
+  , Auth.AccessTokens
+  , loginsController
+  );
   app.use(config.apiPrefix, sessionLogic.tryBearerSession);
   app.lazyMatch('/api/session', function () {
     if (!sessionRouter) {
@@ -169,35 +176,49 @@ function initApi(config, Db, app) {
   });
 
   sessionStrategies = {
-    facebook: function () { return require('./lib/sessionlogic/providers/facebook') }
-  , google: function () { return require('./lib/sessionlogic/providers/google') }
+    'facebook.com': function () { return require('./lib/sessionlogic/providers/facebook'); }
+  , 'google.com': function () { return require('./lib/sessionlogic/providers/google'); }
   //, loopback: require('./lib/sessionlogic/providers/loopback')
   //, ldsconnect: require('./lib/sessionlogic/providers/ldsconnect')
   //, twitter: require('./lib/sessionlogic/providers/twitter')
   //, tumblr: require('./lib/sessionlogic/providers/tumblr')
+
+  // TODO Oauth3 style
+  //  'facebook.com': function () { return require('./lib/sessionlogic/providers/facebook') }
+  //, 'google.com': function () { return require('./lib/sessionlogic/providers/google') }
   };
 
-  Object.keys(sessionStrategies).forEach(function (strategyName) {
+  Object.keys(sessionStrategies).forEach(function (providerUri) {
     // TODO nix this badness
-    var requireStrategy = sessionStrategies[strategyName];
+    var requireStrategy = sessionStrategies[providerUri];
     var sessionRouters = {};
 
-    app.lazyMatch(config.oauthPrefix + '/' + strategyName, function () {
+    // TODO regexp
+    // /api/oauth3/:providerUri/xyz
+    // vs
+    // /api/oauth3/xyz/:providerUri
+    app.lazyMatch(config.oauthPrefix, function () {
       var strategy;
 
-      if (!sessionRouters[strategyName]) {
+      if (!sessionRouters[providerUri]) {
         // TODO
         // Since the API prefix is sometimes necessary,
         // it's probably better to always require the
         // auth providers to use it manually
 
-        // TODO strategyName should be enforced by the requirer, not the requiree
-        strategy = sessionLogic.strategies[strategyName] = requireStrategy();
+        // TODO providerUri should be enforced by the requirer, not the requiree
+        strategy = sessionLogic.strategies[providerUri] = requireStrategy();
         // TODO change all to use 'createRouter' instead of 'init'
-        sessionRouters[strategyName] = urlrouter((strategy.createRouter||strategy.init)(passport, config, { login: sessionLogic.loginWrapper }));
+        sessionRouters[providerUri] = urlrouter((strategy.createRouter||strategy.init)(passport, config, { login: sessionLogic.loginWrapper }));
       }
 
-      return sessionRouters[strategyName];
+      return function (req, res, next) {
+        if (req.url.match(providerUri)) {
+          sessionRouters[providerUri](req, res, next);
+        } else {
+          next();
+        }
+      };
     });
   });
 
@@ -206,6 +227,7 @@ function initApi(config, Db, app) {
   //
   app
     .lazyApi('/session', function () {
+      // TODO root app
       require('./lib/fixtures/root-user').create(ru, Auth);
       return urlrouter(require('./lib/session').createRouter().route);
     })
@@ -239,22 +261,26 @@ function initApi(config, Db, app) {
   // TODO req.jwt
   app.use(config.apiPrefix, function controlApiAccess(req, res, next) {
     var rejectableRequest = require('./lib/common').rejectableRequest;
-    var $token = req.user && req.user.$token;
+    var $token = (req.user && req.user.$token) || req.$token || null;
     var $client;
     var promise;
 
     if (!$token) {
-      next();
+      if (req.user) {
+        res.error({
+          message: "We don't serve your kind here!"
+            + " (it looks like you're trying to access the API with a cookie rather than an API token)"
+        , code: 401
+        , class: "E_NO_TOKEN"
+        });
+      } else {
+        res.error({
+          message: "you must supply an API token to access API resources"
+        , code: 401
+        , class: "E_NO_TOKEN"
+        });
+      }
       return;
-    }
-
-    function clear(req) {
-      req.logout();
-      req.user = null;
-      req.$accounts = null;
-      req.$account = null;
-      req.$token = null;
-      req.$client = null;
     }
 
     promise = $token.load('oauthclient').then(function () {
@@ -270,21 +296,15 @@ function initApi(config, Db, app) {
       // TODO
       // check live && production
       // check allowed domains
+      /*
       if (!$client.get('live') && !$token.get('test')) {
         return PromiseA.reject("You are using a production token in a test environment.");
       }
+      */
 
       if (referer && ua) {
         req.fromBrowser = true;
-      // if ($token.get('insecure'))
         // this is a browser token
-
-        /*
-        if (!referer) {
-          clear(req);
-          return;
-        }
-        */
 
         if ($token.get('test')) {
           domains = config.testDomains || $client.get('urls');
@@ -296,11 +316,18 @@ function initApi(config, Db, app) {
           })) {
             return PromiseA.reject(
               "The request origin/referer did not match any of the allowed **test** domains: '"
-                + testDomains.join(' ') + "'"
+                + config.testDomains.join(' ') + "'"
             );
           }
         } else {
           domains = $client.get('urls');
+          if (!domains) {
+            console.log('$token.toJSON()');
+            console.log($token.toJSON());
+            console.log('$client.toJSON()');
+            console.log($client.toJSON());
+            return PromiseA.reject("no domains");
+          }
           if (!domains.some(function (domain) {
             return url.parse(domain).host === url.parse(referer).host;
           })) {
@@ -312,14 +339,6 @@ function initApi(config, Db, app) {
       } else {
         req.fromServer = true;
         // this is a server token
-
-        /*
-        if (referer) {
-          // a server might have a user agent, but shouldn't have a referer
-          clear(req);
-          return;
-        }
-        */
 
         if ($token.get('test')) {
 
@@ -335,7 +354,7 @@ function initApi(config, Db, app) {
         } else {
           ips = $client.get('ips') || [];
 
-          if (!ips.length && !ips.some(function (allowed) {
+          if (!ips.length && !ips.some(function (allowedIp) {
             return allowedIp === ip;
           })) {
             return PromiseA.reject(
@@ -485,52 +504,6 @@ module.exports.create = function () {
 
   setup = require('./lib/setup').create(app);
   app.use('/setup', setup.route);
-  app.use('/oauth', function (req, res, next) {
-    res.redirect('/api/oauth3' + req.url);
-  });
-  app.use(function (req, res, next) {
-    // TODO update these strings
-
-    // various styles for authorization dialog
-    if (-1 !== [
-      '/dialog/authorize'
-    , '/api/oauth3/dialog/authorize'
-    , '/api/oauth3/dialog'
-    , '/dialog/oauth'                 // facebook style
-    ].indexOf(req.url)) {
-      res.redirect('/api/oauth3/authorization_dialog');
-      return;
-    }
-
-    // various styles for authorization decision
-    if (-1 !== [
-      '/dialog/authorize/decision'
-    , '/api/oauth3/dialog/authorize/decision'
-    ].indexOf(req.url)) {
-      res.redirect('/api/oauth3/authorization_decision');
-      return;
-    }
-
-    // various styles for access_token
-    if (-1 !== [
-      '/api/oauth3/token'
-    , '/oauth/access_token'         // facebook style
-    ].indexOf(req.url)) {
-      res.redirect('/api/oauth3/access_token');
-      return;
-    }
-
-    // various styles for profile
-    if (-1 !== [
-      '/me'
-    , '/profile'
-    ].indexOf(req.url)) {
-      res.redirect('/api/ldsio/accounts');
-      return;
-    }
-
-    next();
-  });
 
   return setup.getConfig().then(function (config) {
     app.set('apiPrefix', config.apiPrefix);

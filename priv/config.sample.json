@@ -15,6 +15,10 @@
   , "local.helloworld3000.com"
   ],
   "oauth3Frontend": "https://local.lds.io",
+  "rootClient": {
+    "id": "TEST_ID_7ccd0f9de3710b6d9a38fe84",
+    "secret": "TEST_SK_5rPR6qPEmJdPcKWoFmAZgitm"
+  },
   "port": 4004,
   "wsport": 4204,
   "rootUser": {
