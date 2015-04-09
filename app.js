@@ -322,10 +322,6 @@ function initApi(config, Db, app) {
         } else {
           domains = $client.get('urls');
           if (!domains) {
-            console.log('$token.toJSON()');
-            console.log($token.toJSON());
-            console.log('$client.toJSON()');
-            console.log($client.toJSON());
             return PromiseA.reject("no domains");
           }
           if (!domains.some(function (domain) {
