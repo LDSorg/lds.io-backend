@@ -9,10 +9,10 @@ function initApi(config, Db, app) {
   // TODO maybe a main DB for core (Accounts) and separate DBs for the modules?
   var sessionLogic;
   var sessionStrategies;
-  var sessionRouter;
+  //var sessionRouter;
     //, ws = require('./lib/ws')
     //, wsport = config.wsport || 8282
-  var ru = config.rootUser;
+  //var ru = config.rootUser;
   var Auth = require('./lib/auth-logic').create(Db, config);
   var ContactNodes = require('./lib/contact-nodes').create(config, Db);
   var Passport = require('passport').Passport;
@@ -45,17 +45,6 @@ function initApi(config, Db, app) {
 
   config.apiPrefix = config.apiPrefix || '/api';
 
-  app
-    .use(config.oauthPrefix, function (req, res, next) {
-        req.skipAuthn = true;
-        next();
-      })
-    .use(config.sessionPrefix, function (req, res, next) {
-        req.skipAuthn = true;
-        next();
-      })
-    ;
-
   //
   // Generic Template Auth
   //
@@ -85,7 +74,7 @@ function initApi(config, Db, app) {
     , resave: false           // see https://github.com/expressjs/session
     }))
     .use(passport.initialize())
-    .use(passport.session())
+    //.use(passport.session())
     ;
 
   if (config.snakeApi) {
@@ -167,13 +156,22 @@ function initApi(config, Db, app) {
   , Auth.AccessTokens
   , loginsController
   );
-  app.use(config.apiPrefix, sessionLogic.tryBearerSession);
+  app.use(function (req, res, next) {
+    if (req.oauth3) {
+      console.warn('[Sanity Fail] req.oauth3 already exists!');
+    } else {
+      req.oauth3 = {};
+    }
+    next();
+  });
+  /*
   app.lazyMatch('/api/session', function () {
     if (!sessionRouter) {
       sessionRouter = urlrouter(sessionLogic.route);
     }
     return sessionRouter;
   });
+  */
 
   sessionStrategies = {
     'facebook.com': function () { return require('./lib/sessionlogic/providers/facebook'); }
@@ -225,12 +223,57 @@ function initApi(config, Db, app) {
   //
   // Generic Session / Login / Account Routes
   //
+  /*
   app
     .lazyApi('/session', function () {
       // TODO root app
       require('./lib/fixtures/root-user').create(ru, Auth);
       return urlrouter(require('./lib/session').createRouter().route);
     })
+  */
+  // TODO inspect token
+  app.use(config.apiPrefix, sessionLogic.tryBearerSession);
+  app.use(config.apiPrefix, function (req, res, next) {
+    var $token = req.$token || (req.user && req.user.$token);
+
+    if (!$token) {
+      next();
+      return;
+    }
+
+    $token.load('oauthclient').then(function () {
+      req.oauth3.$token = $token;
+      req.oauth3.$client = $token.related('oauthclient');
+      req.oauth3.config = {
+        stripe: config.stripe
+      , twilio: config.twilio
+      , mailer: config.mailer
+      };
+      // Note: a token could *technically* support multiple logins,
+      // but I really really dislike that idea - it's better left to the client
+      req.oauth3.logins$ = $token.$login && [$token.$login];
+      req.oauth3.$login = $token.$login;
+      req.oauth3.accounts$ = $token.$login.related('accounts').map(function ($account) { return $account; });
+
+      if (1 === req.oauth3.accounts$.length) {
+        req.oauth3.$account = req.oauth3.accounts$[0];
+      }
+
+      // transitional, for backwards compat
+      req.user = req.user || {};
+      Object.keys(req.oauth3).forEach(function (key) {
+        req.user[key] = req.oauth3[key];
+      });
+
+      next();
+    });
+  });
+
+  app.use(config.apiPrefix, function (req, res, next) {
+    next();
+  });
+
+  app
     .lazyApi('/logins', function () {
       var loginsRestful;
       loginsRestful = Logins.createRouter(app, config, Db, sessionLogic.manualLogin, ContactNodes);
@@ -261,32 +304,23 @@ function initApi(config, Db, app) {
   // TODO req.jwt
   app.use(config.apiPrefix, function controlApiAccess(req, res, next) {
     var rejectableRequest = require('./lib/common').rejectableRequest;
-    var $token = (req.user && req.user.$token) || req.$token || null;
+    var $token = req.oauth3.$token;
     var $client;
     var promise;
 
     if (!$token) {
-      if (req.user) {
-        res.error({
-          message: "We don't serve your kind here!"
-            + " (it looks like you're trying to access the API with a cookie rather than an API token)"
-        , code: 401
-        , class: "E_NO_TOKEN"
-        });
-      } else {
-        res.error({
-          message: "you must supply an API token to access API resources"
-        , code: 401
-        , class: "E_NO_TOKEN"
-        });
-      }
+      res.error({
+        message: "you must supply an API token to access API resources"
+      , code: 401
+      , class: "E_NO_TOKEN"
+      });
       return;
     }
 
     promise = $token.load('oauthclient').then(function () {
       var url = require('url');
       var referer = req.headers.referer || req.headers.origin;
-      var ua = /mozilla|dillo/i.test(req.headers['user-agent']);
+      var ua = /mozilla|dillo|opera|safari|trident|chrome|firefox|webkit|gecko/i.test(req.headers['user-agent']);
       var requestIp = require('request-ip');
       var ip = requestIp.getClientIp(req);
       var domains;
@@ -367,29 +401,26 @@ function initApi(config, Db, app) {
     rejectableRequest(req, res, promise, "checking token against app");
   });
 
+  //
+  // Requires login, but not account
+  //
+  app
+    .lazyMatch(config.apiPrefix + '/ldsio', '/accounts', function () {
+      if (!ldsConnectRestful) {
+        ldsConnectRestful = urlrouter(require('./lib/ldsconnect')
+          .createRouter(app, config, Db, Auth.AccessTokens, ContactNodes.ContactNodes || ContactNodes).route)
+          ;
+      }
+      return ldsConnectRestful;
+    });
+
   app.use(config.apiPrefix, function controlApiAccess(req, res, next) {
+    var $token = req.oauth3.$token;
+    //var $client = req.oauth3.$client;
     var errMsg = "";
 
-    // TODO link all logins to a client
-    req.client = req.client || {};
-    req.client.config = {
-      stripe: config.stripe
-    , twilio: config.twilio
-    , mailer: config.mailer
-    }; // TODO - for stripe token and such
-
-    if (!req.user) {
-      res.error({
-        message: "Invalid login / Unauthorized access to " + config.apiPrefix
-      , code: 401
-      , class: "INVALID-AUTH-N"
-      , superclasses: []
-      });
-      return;
-    }
-
-    // TODO remove
-    if (!req.user.$account) {
+    
+    if (!req.oauth3.accounts$.length) {
       res.error({
         message: "Valid login, but Invalid account / Unauthorized access to " + config.apiPrefix
       , code: 401
@@ -399,7 +430,7 @@ function initApi(config, Db, app) {
       return;
     }
 
-    if (req.user.$token) {
+    if (-1 === [ 'password', 'delegated' ].indexOf($token.get('grantType')) && 'login' !== $token.get('as')) {
       next();
       return;
     }
@@ -416,6 +447,7 @@ function initApi(config, Db, app) {
       next();
       return;
     }
+
     if (req.headers.origin) {
       errMsg = "Invalid Origin '" + encodeURI(req.headers.origin) + "'";
     } else if (req.headers.referer) {
@@ -448,7 +480,7 @@ function initApi(config, Db, app) {
     .lazy(config.apiPrefix + '/ldsio', function () {
       if (!ldsConnectRestful) {
         ldsConnectRestful = urlrouter(require('./lib/ldsconnect')
-          .createRouter(app, config, Db, ContactNodes.ContactNodes || ContactNodes).route)
+          .createRouter(app, config, Db, Auth.AccessTokens, ContactNodes.ContactNodes || ContactNodes).route)
           ;
       }
       return ldsConnectRestful;
@@ -456,7 +488,7 @@ function initApi(config, Db, app) {
     .lazy(config.apiPrefix + '/ldsconnect', function () {
       if (!ldsConnectRestful) {
         ldsConnectRestful = urlrouter(require('./lib/ldsconnect')
-          .createRouter(app, config, Db, ContactNodes.ContactNodes || ContactNodes).route)
+          .createRouter(app, config, Db, Auth.AccessTokens, ContactNodes.ContactNodes || ContactNodes).route)
           ;
       }
       return ldsConnectRestful;
