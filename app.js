@@ -377,7 +377,7 @@ function initApi(config, Db, app) {
             return allowedIp === ip;
           })) {
             return PromiseA.reject(
-              "The request ip did not match the allowed **test** ips."
+              "The request ip did not match the allowed test ips."
               + " Note: use the form 1.1.1.1 subnet checking (1.1.0.0/16) is not yet implemented)"
             );
           }
