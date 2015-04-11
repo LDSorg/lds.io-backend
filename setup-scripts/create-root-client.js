@@ -5,13 +5,13 @@ var path = require('path');
 var promise;
 
 var config;
-var configFile = path.join(__dirname, 'priv', 'config.json');
+var configFile = path.join(__dirname, '..', 'priv', 'config.json');
 config = require(configFile);
 // TODO setup should attach sql passphrase for this db
-config.knexInst = require('./lib/knex-connector').create(config.knex);
+config.knexInst = require('../lib/knex-connector').create(config.knex);
 
-promise = require('./bookcase/bookshelf-models').create(config, config.knexInst).then(function (Db) {
-  var OauthClientFactory = require('./lib/oauthclients.js');
+promise = require('../bookcase/bookshelf-models').create(config, config.knexInst).then(function (Db) {
+  var OauthClientFactory = require('../lib/oauthclients.js');
   var oauthclients = OauthClientFactory.createController(config, Db)
   return oauthclients;
 });
@@ -38,6 +38,20 @@ promise.then(function (OauthClients) {
   , repo: "https://github.com/LDSorg/lds.io-backend"
   , keywords: ["lds.io", "api", "root"]
   }).then(function ($client) {
-    console.log($client.toJSON());
+    $client.related('apikeys').forEach(function ($key) {
+      var title = ($key.get('test') && 'Development' || 'Production');
+      title += ' ' + ($key.get('insecure') && 'Browser' || 'Server');
+      title += ' Key:';
+      console.log(title);
+      console.log('    ' + $key.get('key'));
+      if ($key.get('secret') && 'anonymous' !== $key.get('secret')) {
+        console.log('    ' + $key.get('secret'));
+      }
+      console.log('');
+    });
+
+    setTimeout(function () {
+      process.exit();
+    }, 300);
   });
 });
