@@ -33,7 +33,7 @@ promise.then(function (OauthClients) {
     , "https://beta.lds.io"
     ]
   , ips: ["66.172.10.146", "45.56.23.132", "127.0.0.1"]
-  , logo: "https://beta.ldsconnect.org/images/lds-connect-logo-inverse-32px.png"
+  , logo: "https://ldsconnect.org/images/lds-connect-logo-inverse-32px.png"
   , live: true
   , repo: "https://github.com/LDSorg/lds.io-backend"
   , keywords: ["lds.io", "api", "root"]
