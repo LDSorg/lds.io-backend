@@ -336,6 +336,14 @@ function initApi(config, Db, app) {
       }
       */
 
+      if (/^curl\//.test(req.headers['user-agent'])) {
+        if ($token.get('test')) {
+          ua = true;
+          referer = referer || 'https://local.lds.io';
+        } else {
+          return PromiseA.reject(new Error("production tokens may not be used in test environments"));
+        }
+      }
       if (referer && ua) {
         req.fromBrowser = true;
         // this is a browser token
