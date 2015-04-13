@@ -337,7 +337,7 @@ function initApi(config, Db, app) {
       */
 
       if (/^curl\//.test(req.headers['user-agent'])) {
-        if ($token.get('test')) {
+        if ($token.get('test') || $client.get('root') || 'groot' === $client.get('accountUuid')) {
           ua = true;
           referer = referer || 'https://local.lds.io';
         } else {
