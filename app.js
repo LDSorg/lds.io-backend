@@ -164,14 +164,6 @@ function initApi(config, Db, app) {
     }
     next();
   });
-  /*
-  app.lazyMatch('/api/session', function () {
-    if (!sessionRouter) {
-      sessionRouter = urlrouter(sessionLogic.route);
-    }
-    return sessionRouter;
-  });
-  */
 
   sessionStrategies = {
     'facebook.com': function () { return require('./lib/sessionlogic/providers/facebook'); }
@@ -241,32 +233,30 @@ function initApi(config, Db, app) {
       return;
     }
 
-    $token.load('oauthclient').then(function () {
-      req.oauth3.$token = $token;
-      req.oauth3.$client = $token.related('oauthclient');
-      req.oauth3.config = {
-        stripe: config.stripe
-      , twilio: config.twilio
-      , mailer: config.mailer
-      };
-      // Note: a token could *technically* support multiple logins,
-      // but I really really dislike that idea - it's better left to the client
-      req.oauth3.logins$ = $token.$login && [$token.$login];
-      req.oauth3.$login = $token.$login;
-      req.oauth3.accounts$ = $token.$login.related('accounts').map(function ($account) { return $account; });
+    req.oauth3.$token = $token;
+    req.oauth3.$client = $token.related('oauthclient');
+    req.oauth3.config = {
+      stripe: config.stripe
+    , twilio: config.twilio
+    , mailer: config.mailer
+    };
+    // Note: a token could *technically* support multiple logins,
+    // but I really really dislike that idea - it's better left to the client
+    req.oauth3.logins$ = $token.$login && [$token.$login];
+    req.oauth3.$login = $token.$login;
+    req.oauth3.accounts$ = $token.$login.related('accounts').map(function ($account) { return $account; });
 
-      if (1 === req.oauth3.accounts$.length) {
-        req.oauth3.$account = req.oauth3.accounts$[0];
-      }
+    if (1 === req.oauth3.accounts$.length) {
+      req.oauth3.$account = req.oauth3.accounts$[0];
+    }
 
-      // transitional, for backwards compat
-      req.user = req.user || {};
-      Object.keys(req.oauth3).forEach(function (key) {
-        req.user[key] = req.oauth3[key];
-      });
-
-      next();
+    // transitional, for backwards compat
+    req.user = req.user || {};
+    Object.keys(req.oauth3).forEach(function (key) {
+      req.user[key] = req.oauth3[key];
     });
+
+    next();
   });
 
   app.use(config.apiPrefix, function (req, res, next) {
