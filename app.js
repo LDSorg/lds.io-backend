@@ -370,7 +370,7 @@ function initApi(config, Db, app) {
 
         if ($token.get('test')) {
 
-          ips = config.testDomains || $client.get('ips') || [];
+          ips = config.testIps || $client.get('ips') || [];
           if (ips.length && !ips.some(function (allowedIp) {
             return allowedIp === ip;
           })) {
